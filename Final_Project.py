@@ -4,14 +4,17 @@ import random
 import os
 import sys
 
+# -------------------------
+# Setup
+# -------------------------
+
+# Initialize Pygame
 pygame.init()
-pygame.display.toggle_fullscreen
 
-# -------------------------
-# Initializing Variables
-# -------------------------
+# Window name
+pygame.display.set_caption("Final Project")
 
-# Function to get the correct path for resources if run on different OS
+# Get the correct path for resources if run on different OS
 def resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
@@ -19,11 +22,11 @@ def resource_path(relative_path):
     except Exception:
         # Running in development mode (not bundled)
         base_path = os.path.abspath(".")
-    
     return os.path.join(base_path, relative_path)
 
-# Window name
-pygame.display.set_caption("Final Project")
+# -------------------------
+# Initializing Variables
+# -------------------------
 
 # Flags for fullscreen and doublebuffering
 flags = FULLSCREEN | DOUBLEBUF
@@ -46,10 +49,10 @@ FramePerSec = pygame.time.Clock()
 BACKGROUND = pygame.image.load(resource_path("Background.png"))
 BACKGROUND = pygame.transform.scale(BACKGROUND, (1600, 900))
 
-# shooting action variable
+# Shooting action variable
 shoot = False
 
-# load bullet image
+# Load bullet image
 bullet_img = pygame.image.load(resource_path("Bullet.png")).convert_alpha()
 
 # Scoreboard variable
@@ -61,6 +64,11 @@ textColor = (255, 255, 255)
 
 # Game over text
 GAME_OVER = "Game Over"
+EXIT_GAME_PROMPT = "Press Enter to Exit"
+
+# Round variable
+ROUND = 0
+
 
 # -------------------------
 # Game Classes
@@ -82,6 +90,20 @@ class Player(pygame.sprite.Sprite):
         self.frame_index = 0
         self.action = 0
         self.update_time = pygame.time.get_ticks()
+        # retrieve animations
+        self.getAnimations()
+        # set player rectangle
+        self.rect = self.image.get_rect()
+        # direction of sprite
+        self.direction = 1
+        self.flip = False
+        # Set starting position
+        self.pos = vec((SCREEN_WIDTH/2, SCREEN_HEIGHT - 200))
+        # Physics
+        self.vel = vec(0,0)
+        self.acc = vec(0,0)
+
+    def getAnimations(self):
         # loop through animation folders
         temp_list = []
         for i in range(1):
@@ -100,18 +122,6 @@ class Player(pygame.sprite.Sprite):
         self.animation_list.append(temp_list)
         # set image to current frame of current action
         self.image = self.animation_list[self.action][self.frame_index]
-
-        # set player rectangle
-        self.rect = self.image.get_rect()
-        
-        # direction of sprite
-        self.direction = 1
-        self.flip = False
-        
-        # Physics
-        self.pos = vec((SCREEN_WIDTH/2, SCREEN_HEIGHT))
-        self.vel = vec(0,0)
-        self.acc = vec(0,0)
         
     def move(self):
         # Player Gravity
@@ -145,15 +155,23 @@ class Player(pygame.sprite.Sprite):
         self.jumping = True
         # if on platform
         hits = pygame.sprite.spritecollide(self, platforms, False)
-        if hits:
-            self.vel.y = -19
+        try:
+            if hits[0].rect.bottom > self.rect.bottom:
+                self.vel.y = -19
+        except:
+            pass
 
+    # creates bullet objects
     def shoot(self):
         if self.alive:
+            # checks if cooldown is finished and resets it
             if self.shoot_cooldown == 0:
                 self.shoot_cooldown = 20
+                # create bullet at the edge of the player sprite
                 bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] * self.direction), \
-                        self.rect.centery - (self.rect.size[1] / 4.5), self.direction)
+                                self.rect.centery - (self.rect.size[1] / 4.5), self.direction, \
+                                "Player")
+                # update bullet image depending on direction of player
                 if self.direction < 0:
                     bullet.image = pygame.transform.flip(bullet.image, self.flip, False)
                 bullet_group.add(bullet)
@@ -163,25 +181,28 @@ class Player(pygame.sprite.Sprite):
         if self.health <= 0:
             self.alive = False
             self.kill()
+            self.health = 0
 
     # Collision rectangle for Player
     def draw(self, surface):
         surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
 
+    # check if player is touching a platform object in platform group
     def update_ground_collision(self):
         hits = pygame.sprite.spritecollide(P1 , platforms, False)
         if self.vel.y > 0:
             self.jumping = True
             try:
-                if hits[0].rect.top < self.rect.bottom:
+                if hits[0].rect.bottom > self.rect.bottom:
                     self.pos.y = hits[0].rect.top
                     self.vel.y = 0
                     self.jumping = False
             except IndexError:
                 pass
 
+    # update cooldowns and Player methods
     def update(self):
-       # update player state
+        # update player state
         self.check_alive()
         # call animation method
         self.update_animation()
@@ -233,31 +254,16 @@ class Enemy(pygame.sprite.Sprite):
         self.frame_index = 0
         self.action = 0
         self.update_time = pygame.time.get_ticks()
-        # loop through animation folders
-        temp_list = []
-        for i in range(1):
-            img = pygame.image.load(resource_path(f'Enemy_Idle/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(5):
-            img = pygame.image.load(resource_path(f'Enemy_Walking/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(1):
-            img = pygame.image.load(resource_path(f'Enemy_Jumping/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        # set image to current frame of current action
-        self.image = self.animation_list[self.action][self.frame_index]
+        # retrieve animations
+        self.getAnimations()
         # set player rectangle
         self.rect = self.image.get_rect()
         # direction of sprite
         self.direction = 1
         self.flip = False
-        # Physics
+        # Starting position
         self.pos = vec((x, y))
+        # Physics
         self.vel = vec(0,0)
         self.acc = vec(0,0)
         
@@ -303,20 +309,47 @@ class Enemy(pygame.sprite.Sprite):
             self.pos.x = SCREEN_WIDTH
         self.rect.midbottom = self.pos
 
+    def getAnimations(self):
+        # loop through animation folders
+        temp_list = []
+        for i in range(1):
+            img = pygame.image.load(resource_path(f'Enemy_Idle/{i}.png')).convert_alpha()
+            temp_list.append(img)
+        self.animation_list.append(temp_list)
+        temp_list = []
+        for i in range(5):
+            img = pygame.image.load(resource_path(f'Enemy_Walking/{i}.png')).convert_alpha()
+            temp_list.append(img)
+        self.animation_list.append(temp_list)
+        temp_list = []
+        for i in range(1):
+            img = pygame.image.load(resource_path(f'Enemy_Jumping/{i}.png')).convert_alpha()
+            temp_list.append(img)
+        self.animation_list.append(temp_list)
+        # set image to current frame of current action
+        self.image = self.animation_list[self.action][self.frame_index]
+
     # Jumping
     def jump(self):
         self.jumping = True
         # if on platform
         hits = pygame.sprite.spritecollide(self, platforms, False)
-        if hits:
-            self.vel.y = -19
-
+        try:
+            if hits[0].rect.bottom > self.rect.bottom:
+                self.vel.y = -19
+        except:
+            pass
+    # creates bullet objects
     def shoot(self):
+        # checks if cooldown is finished and resets it
         if self.shoot_cooldown == 0:
             self.shoot_cooldown = 80
+            # create bullet at the edge of the enemy sprite
             bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] \
                             * self.direction),self.rect.centery \
-                            - (self.rect.size[1] / 4.5), self.direction)
+                            - (self.rect.size[1] / 4.5), self.direction, \
+                            "Enemy")
+            # update bullet image depending on direction of enemy
             if self.direction < 0:
                 bullet.image = pygame.transform.flip(bullet.image, self.flip, False)
             bullet_group.add(bullet)
@@ -346,6 +379,7 @@ class Enemy(pygame.sprite.Sprite):
         if self.frame_index >= len(self.animation_list[self.action]):
             self.frame_index = 0
 
+    # change animation depeding on input
     def update_action(self, new_action):
         # check if new action is different than previous action
         if new_action != self.action:
@@ -354,6 +388,7 @@ class Enemy(pygame.sprite.Sprite):
             self.frame_index = 0
             self.update_time = pygame.time.get_ticks()
 
+    # update cooldowns and Enemy methods
     def update(self):
         # update enemy stae
         self.check_alive()
@@ -365,23 +400,18 @@ class Enemy(pygame.sprite.Sprite):
         # check if enemy is jumping
         if self.jumping:
             self.update_action(2) # 2 is jumping 
-        # check for platform collision
-        hits = pygame.sprite.spritecollide(self , platforms, False)
-        if self.vel.y > 0:
-            if hits:
-                self.pos.y = hits[0].rect.top + 1
-                self.vel.y = 0
         # update cooldown
         self.update_animation()
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
 
+    # check if enemy is touching a platform object in platform group
     def update_ground_collision(self):
         hits = pygame.sprite.spritecollide(self , platforms, False)
         if self.vel.y > 0:
             self.jumping = True
             try:
-                if hits[0].rect.top < self.rect.bottom:
+                if hits[0].rect.bottom > self.rect.bottom:
                     self.pos.y = hits[0].rect.top
                     self.vel.y = 0
                     self.jumping = False
@@ -390,13 +420,15 @@ class Enemy(pygame.sprite.Sprite):
         
 # Bullet Class
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, x, y, direction):
+    def __init__(self, x, y, direction, type):
         pygame.sprite.Sprite.__init__(self)
         self.speed = 12
         self.image = bullet_img
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
         self.direction = direction
+        # shows if bullet is enemies or players
+        self.type = type
 
     def update(self):
         # move bullet
@@ -406,12 +438,12 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
         # check if bullet collides with sprite
         if pygame.sprite.spritecollide(P1, bullet_group, False):
-            if P1.alive:
+            if P1.alive and self.type == "Enemy":
                 self.kill()
                 P1.health -= 1
         for enemy in enemy_sprites:
             if pygame.sprite.spritecollide(enemy, bullet_group, False):
-                if enemy.alive:
+                if enemy.alive  and self.type == "Player":
                     self.kill()
                     enemy.health -= 1
 
@@ -419,10 +451,7 @@ class Bullet(pygame.sprite.Sprite):
 class Platform(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.surf = pygame.Surface((SCREEN_WIDTH, 20))
-        self.surf.fill((255,0,0))
-        self.rect = self.surf.get_rect(center = (SCREEN_WIDTH/2, SCREEN_HEIGHT - 40))
-
+        
 # -------------------------
 # Objects and Sprites
 # -------------------------
@@ -488,14 +517,14 @@ while True:
         # adds 50 points to score when enemy is killed
         if enemy.alive == False:
             SCOREBOARD += 50
-    
+
     # update and draw bullets
     bullet_group.update()
-    
+
     # player shooting
     if shoot: 
         P1.shoot()
-        
+
     # change action
     pressed_keys = pygame.key.get_pressed()
     if P1.alive:
@@ -505,6 +534,11 @@ while True:
             P1.update_action(1) # 1 is walking
         else:
             P1.update_action(0) # 0 is Idle
+
+    # close game on game over
+    if pressed_keys[K_RETURN]:
+        pygame.quit()
+        sys.exit()
 
     # events check
     for event in pygame.event.get():
@@ -539,6 +573,7 @@ while True:
 
     # When there are no enemies
     if len(enemy_sprites) == 0:
+        ROUND += 1
         P1.health = 5
         # create 3 to 6 enemies
         for enemy in range(random.randint(3, 6)):
@@ -551,13 +586,28 @@ while True:
             enemy_sprites.add(enemy)
 
     # Display Scoreboard
-    text = font.render(str(SCOREBOARD), True, textColor)
+    text = font.render(("Score: " + str(SCOREBOARD)), True, textColor)
     DISPLAYSURF.blit(text, (10, SCREEN_HEIGHT - 48))
+
+    # Display Player Health
+    text = font.render(("Health: " + str(P1.health)), True, textColor)
+    DISPLAYSURF.blit(text, (SCREEN_WIDTH - 250, SCREEN_HEIGHT - 48))
 
     # Display Game Over
     if P1.alive == False:
         text = font.render(str(GAME_OVER), True, textColor)
-        DISPLAYSURF.blit(text, (SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2))
+        DISPLAYSURF.blit(text, (SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2))
+
+    EXIT_GAME_PROMPT
+
+    # Display Game Over Directions
+    if P1.alive == False:
+        text = font.render(str(EXIT_GAME_PROMPT), True, textColor)
+        DISPLAYSURF.blit(text, (SCREEN_WIDTH/2 - 250, SCREEN_HEIGHT/2 + 50))
+
+    # Display Round Number
+    text = font.render(str("Round: " + str(ROUND)), True, textColor)
+    DISPLAYSURF.blit(text, (SCREEN_WIDTH - 550, SCREEN_HEIGHT - 48))
 
     # updates game at preset FPS
     pygame.display.update()
