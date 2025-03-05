@@ -22,7 +22,7 @@ Open the command prompt and type:
 
 Check for successful install by typing:
 
-	show pygame
+	pip show pygame
 
 Running the Script:
 
