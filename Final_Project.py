@@ -92,8 +92,6 @@ class Player(pygame.sprite.Sprite):
         self.update_time = pygame.time.get_ticks()
         # retrieve animations
         self.getAnimations()
-        # set player rectangle
-        self.rect = self.image.get_rect()
         # direction of sprite
         self.direction = 1
         self.flip = False
@@ -122,6 +120,8 @@ class Player(pygame.sprite.Sprite):
         self.animation_list.append(temp_list)
         # set image to current frame of current action
         self.image = self.animation_list[self.action][self.frame_index]
+        # set player rectangle
+        self.rect = self.image.get_rect()
         
     def move(self):
         # Player Gravity
@@ -202,6 +202,9 @@ class Player(pygame.sprite.Sprite):
 
     # update cooldowns and Player methods
     def update(self):
+        # set max fall velocity of player
+        if self.vel.y > 8:
+            self.vel.y = 8
         # update player state
         self.check_alive()
         # call animation method
@@ -256,8 +259,6 @@ class Enemy(pygame.sprite.Sprite):
         self.update_time = pygame.time.get_ticks()
         # retrieve animations
         self.getAnimations()
-        # set player rectangle
-        self.rect = self.image.get_rect()
         # direction of sprite
         self.direction = 1
         self.flip = False
@@ -267,7 +268,7 @@ class Enemy(pygame.sprite.Sprite):
         self.vel = vec(0,0)
         self.acc = vec(0,0)
         
-    def move(self, surface):
+    def move(self):
         # Enemy Gravity
         self.acc = vec(0,.6)
         # Enemy movement behavior
@@ -328,6 +329,8 @@ class Enemy(pygame.sprite.Sprite):
         self.animation_list.append(temp_list)
         # set image to current frame of current action
         self.image = self.animation_list[self.action][self.frame_index]
+        # set player rectangle
+        self.rect = self.image.get_rect()
 
     # Jumping
     def jump(self):
@@ -390,18 +393,22 @@ class Enemy(pygame.sprite.Sprite):
 
     # update cooldowns and Enemy methods
     def update(self):
+        # set max fall velocity of enemy
+        if self.vel.y > 8:
+            self.vel.y = 8
         # update enemy stae
         self.check_alive()
         # shoot if alive
         if self.alive:
             self.shoot()
-        # call ground collision method
-        self.update_ground_collision()
         # check if enemy is jumping
         if self.jumping:
             self.update_action(2) # 2 is jumping 
-        # update cooldown
+        # update animation
         self.update_animation()
+        # call ground collision method
+        self.update_ground_collision()
+        # update cooldown
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
 
@@ -506,16 +513,30 @@ PT5.rect = PT5.surf.get_rect(center = (SCREEN_WIDTH/2 + 5, SCREEN_HEIGHT - 625))
 
 while True:
 
+    # When there are no enemies
+    if len(enemy_sprites) == 0:
+        ROUND += 1
+        P1.health = 5
+        # create 3 to 6 enemies
+        for enemy in range(random.randint(3, 6)):
+            # set random starting point
+            enemy = Enemy(random.randint(100, 1500), random.randint(45, 800))
+            # set random stage of movement cooldown
+            enemy.walk_cooldown = random.randint(1, 800)
+            # add enemy to sprite groups
+            all_sprites.add(enemy)
+            enemy_sprites.add(enemy)
+
     # updates player
     P1.update()
     P1.move()
 
     # updates and draws enemy
     for enemy in enemy_sprites:
-        enemy.move(DISPLAYSURF)
+        enemy.move()
         enemy.update()
         # adds 50 points to score when enemy is killed
-        if enemy.alive == False:
+        if enemy.alive == False and P1.alive:
             SCOREBOARD += 50
 
     # update and draw bullets
@@ -571,20 +592,6 @@ while True:
     for enemy in enemy_sprites:
         enemy.draw(DISPLAYSURF)
 
-    # When there are no enemies
-    if len(enemy_sprites) == 0:
-        ROUND += 1
-        P1.health = 5
-        # create 3 to 6 enemies
-        for enemy in range(random.randint(3, 6)):
-            # set random starting point
-            enemy = Enemy(random.randint(100, 1500), random.randint(45, 800))
-            # set random stage of movement cooldown
-            enemy.walk_cooldown = random.randint(1, 800)
-            # add enemy to sprite groups
-            all_sprites.add(enemy)
-            enemy_sprites.add(enemy)
-
     # Display Scoreboard
     text = font.render(("Score: " + str(SCOREBOARD)), True, textColor)
     DISPLAYSURF.blit(text, (10, SCREEN_HEIGHT - 48))
@@ -597,8 +604,6 @@ while True:
     if P1.alive == False:
         text = font.render(str(GAME_OVER), True, textColor)
         DISPLAYSURF.blit(text, (SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2))
-
-    EXIT_GAME_PROMPT
 
     # Display Game Over Directions
     if P1.alive == False:
