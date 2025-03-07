@@ -130,12 +130,12 @@ class Player(pygame.sprite.Sprite):
         pressed_keys = pygame.key.get_pressed()
         if self.alive:
             if pressed_keys[K_a]:
-                self.acc.x = -ACC + .4
+                self.acc.x = -ACC + .1
                 # flip sprite to face the left
                 self.flip = False
                 self.direction = 1
             if pressed_keys[K_d]:
-                self.acc.x = ACC - .4
+                self.acc.x = ACC - .1
                 # flip sprite to face the left
                 self.flip = True
                 self.direction = -1
@@ -218,7 +218,7 @@ class Player(pygame.sprite.Sprite):
     # Changes player image to animate actions 
     def update_animation(self):
         # update animation
-        ANIMATION_COOLDOWN = 100
+        ANIMATION_COOLDOWN = 80
         # update animation depending on current frame
         self.image = self.animation_list[self.action][self.frame_index]
         # check time
@@ -277,10 +277,10 @@ class Enemy(pygame.sprite.Sprite):
                 self.walk_cooldown = 0
             if self.walk_cooldown < 350:
                 # move right
-                self.acc.x = ACC - .4
+                self.acc.x = ACC - .1
             else:
                 # move left
-                self.acc.x = -ACC + .4
+                self.acc.x = -ACC + .1
             if str(self.walk_cooldown).endswith("00"):
                 self.jump()
         # increase walk cooldown with every game loop
@@ -346,7 +346,7 @@ class Enemy(pygame.sprite.Sprite):
     def shoot(self):
         # checks if cooldown is finished and resets it
         if self.shoot_cooldown == 0:
-            self.shoot_cooldown = 80
+            self.shoot_cooldown = 70
             # create bullet at the edge of the enemy sprite
             bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] \
                             * self.direction),self.rect.centery \
@@ -371,7 +371,7 @@ class Enemy(pygame.sprite.Sprite):
     # Changes player image to animate actions 
     def update_animation(self):
         # update animation
-        ANIMATION_COOLDOWN = 100
+        ANIMATION_COOLDOWN = 80
         # update animation depending on current frame
         self.image = self.animation_list[self.action][self.frame_index]
         # check time
@@ -427,7 +427,7 @@ class Enemy(pygame.sprite.Sprite):
         
 # Bullet Class
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, x, y, direction, type):
+    def __init__(self, x, y, direction, bulletType):
         pygame.sprite.Sprite.__init__(self)
         self.speed = 12
         self.image = bullet_img
@@ -435,7 +435,9 @@ class Bullet(pygame.sprite.Sprite):
         self.rect.center = (x, y)
         self.direction = direction
         # shows if bullet is enemies or players
-        self.type = type
+        self.type = bulletType
+        # variable for making sure bullet only collides on a single frame
+        self.collide = 0
 
     def update(self):
         # move bullet
@@ -445,14 +447,16 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
         # check if bullet collides with sprite
         hits = pygame.sprite.spritecollide(P1, bullet_group, False)
-        if hits and P1.alive and hits[0].type == "Enemy":
-                self.kill()
-                P1.health -= 1
+        if hits and P1.alive and hits[0].type == "Enemy" and hits[0].collide == 0:
+            hits[0].collide = 1
+            self.kill()
+            P1.health -= 1
         for enemy in enemy_sprites:
             hits = pygame.sprite.spritecollide(enemy, bullet_group, False)
-            if hits and enemy.alive and hits[0].type == "Player":
-                    self.kill()
-                    enemy.health -= 1
+            if hits and enemy.alive and hits[0].type == "Player" and hits[0].collide == 0:
+                hits[0].collide = 1
+                self.kill()
+                enemy.health -= 1
 
 # Platform Class
 class Platform(pygame.sprite.Sprite):
@@ -527,6 +531,9 @@ while True:
             all_sprites.add(enemy)
             enemy_sprites.add(enemy)
 
+    # update and draw bullets
+    bullet_group.update()
+
     # updates player
     P1.update()
     P1.move()
@@ -538,10 +545,7 @@ while True:
         # adds 50 points to score when enemy is killed
         if enemy.alive == False and P1.alive:
             SCOREBOARD += 50
-
-    # update and draw bullets
-    bullet_group.update()
-
+            
     # player shooting
     if shoot: 
         P1.shoot()
@@ -581,8 +585,6 @@ while True:
 
     # Display images
     DISPLAYSURF.blit(BACKGROUND, (0, 0))
-    if P1.alive:
-        P1.draw(DISPLAYSURF)
     bullet_group.draw(DISPLAYSURF)
     DISPLAYSURF.blit(PT1.surf, PT1.rect)
     DISPLAYSURF.blit(PT2.surf, PT2.rect)
@@ -591,6 +593,8 @@ while True:
     DISPLAYSURF.blit(PT5.surf, PT5.rect)
     for enemy in enemy_sprites:
         enemy.draw(DISPLAYSURF)
+    if P1.alive:
+        P1.draw(DISPLAYSURF)
 
     # Display Scoreboard
     text = font.render(("Score: " + str(SCOREBOARD)), True, textColor)
