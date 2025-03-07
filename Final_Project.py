@@ -46,7 +46,7 @@ FPS = 60
 FramePerSec = pygame.time.Clock()
 
 # Background
-BACKGROUND = pygame.image.load(resource_path("Background.png"))
+BACKGROUND = pygame.image.load(resource_path("Background.png")).convert_alpha()
 BACKGROUND = pygame.transform.scale(BACKGROUND, (1600, 900))
 
 # Shooting action variable
