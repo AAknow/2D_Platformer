@@ -2,7 +2,6 @@ import pygame, sys
 from pygame.locals import *
 import random
 import os
-import sys
 
 # -------------------------
 # Setup
@@ -45,12 +44,12 @@ FRIC = -0.12
 FPS = 60
 FramePerSec = pygame.time.Clock()
 
+# Shoot variable
+shoot = False
+
 # Background
 BACKGROUND = pygame.image.load(resource_path("Background.png")).convert_alpha()
 BACKGROUND = pygame.transform.scale(BACKGROUND, (1600, 900))
-
-# Shooting action variable
-shoot = False
 
 # Load bullet image
 bullet_img = pygame.image.load(resource_path("Bullet.png")).convert_alpha()
@@ -74,54 +73,165 @@ ROUND = 0
 # Game Classes
 # -------------------------
 
-# Player Class
-class Player(pygame.sprite.Sprite):
+class Sprite(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        # player health
+	# sprite health
         self.health = 5
-        # check if player is jumping
+        # check if sprite is jumping
         self.jumping = False
         # cooldowns
         self.shoot_cooldown = 0
         # get sprite image
         self.alive = True
+        # list to store animation lists
         self.animation_list = []
+        # current index of animation list
         self.frame_index = 0
+        # the sprites current action
         self.action = 0
+        # checks time for changing animation cooldown   
         self.update_time = pygame.time.get_ticks()
-        # retrieve animations
-        self.getAnimations()
         # direction of sprite
         self.direction = 1
         self.flip = False
-        # Set starting position
-        self.pos = vec((SCREEN_WIDTH/2, SCREEN_HEIGHT - 200))
         # Physics
         self.vel = vec(0,0)
         self.acc = vec(0,0)
 
-    def getAnimations(self):
+    def get_animations(self):
         # loop through animation folders
         temp_list = []
+        # Idle Stance Animation
         for i in range(1):
-            img = pygame.image.load(resource_path(f'Player_Idle/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'{self.type}_Idle/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         temp_list = []
+        # Walking Animation
         for i in range(5):
-            img = pygame.image.load(resource_path(f'Player_Walking/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'{self.type}_Walking/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         temp_list = []
+        # Jumping Animation
         for i in range(1):
-            img = pygame.image.load(resource_path(f'Player_Jumping/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'{self.type}_Jumping/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         # set image to current frame of current action
         self.image = self.animation_list[self.action][self.frame_index]
         # set player rectangle
         self.rect = self.image.get_rect()
+
+    # update cooldowns and sprites methods
+    def update(self):
+        # set max fall velocity of sprite
+        if self.vel.y > 8:
+            self.vel.y = 8
+        # update sprite state
+        self.check_alive()
+        # update sprites jumping animation
+        if self.jumping:
+            self.update_action(2) # 2 is jumping
+        # call animation method
+        self.update_animation()
+        # call ground collision method
+        self.update_ground_collision()
+        # update cooldown
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
+        if self.type == "Enemy":
+            self.shoot()
+
+    # change animation depending on action
+    def update_action(self, new_action):
+        # check if new action is different than previous action
+        if new_action != self.action:
+            self.action = new_action
+            # update the animation setting
+            self.frame_index = 0
+            self.update_time = pygame.time.get_ticks()
+
+    # Changes sprite image to animate actions 
+    def update_animation(self):
+        # update animation cooldown
+        ANIMATION_COOLDOWN = 80
+        # update animation depending on current frame
+        self.image = self.animation_list[self.action][self.frame_index]
+        # check time
+        if pygame.time.get_ticks() - self.update_time > ANIMATION_COOLDOWN:
+            self.update_time = pygame.time.get_ticks()
+            self.frame_index += 1
+        # if the animation runs out then start over
+        if self.frame_index >= len(self.animation_list[self.action]):
+            self.frame_index = 0
+
+    # collision rectangle for sprite
+    def draw(self, surface):
+        surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
+
+    # check if sprite is colliding with platform group
+    def update_ground_collision(self):
+        hits = pygame.sprite.spritecollide(self , platforms, False)
+        # checks if falling
+        if self.vel.y > 0:
+            self.jumping = True
+            # checks if the bottom of the sprite rectangle is above a platform
+            try:
+                if hits[0].rect.bottom > self.rect.bottom:
+                    self.pos.y = hits[0].rect.top
+                    self.vel.y = 0
+                    self.jumping = False
+            except IndexError:
+                pass
+
+    # checks if sprite is alive
+    def check_alive(self):
+        if self.health <= 0:
+            self.alive = False
+            self.kill()
+            self.health = 0
+        
+    # jumping
+    def jump(self):
+        self.jumping = True
+        # if on platform
+        hits = pygame.sprite.spritecollide(self, platforms, False)
+        try:
+            if hits[0].rect.bottom > self.rect.bottom:
+                self.vel.y = -19
+        except:
+            pass
+
+    # creates bullet objects
+    def shoot(self):
+        if self.alive:
+            # checks if cooldown is finished and resets it
+            if self.shoot_cooldown == 0:
+                self.shoot_cooldown = 40
+                # create bullet at the edge of the sprite
+                bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] * self.direction), \
+                                self.rect.centery - (self.rect.size[1] / 4.5), self.direction, \
+                                self.type)
+                # update bullet image depending on direction of sprite
+                if self.direction < 0:
+                    bullet.image = pygame.transform.flip(bullet.image, self.flip, False)
+                bullet_group.add(bullet)
+
+
+# Player Class
+class Player(Sprite):
+    def __init__(self, hitpoints, spawn_x, spawn_y, sprite_type):
+        super().__init__()
+        # set base health
+        self.health = hitpoints
+        # Starting position
+        self.pos = vec(spawn_x, spawn_y)
+        # set sprite type as player
+        self.type = "Player"
+        # retrieve animations
+        self.get_animations()
         
     def move(self):
         # Player Gravity
@@ -143,131 +253,21 @@ class Player(pygame.sprite.Sprite):
         self.acc.x += self.vel.x * FRIC
         self.vel += self.acc
         self.pos += self.vel + 0.5 * self.acc
-        # Screen warping (left to right and vice versa)
-        if self.pos.x > SCREEN_WIDTH:
-            self.pos.x = 0
-        if self.pos.x < 0:
-            self.pos.x = SCREEN_WIDTH
         self.rect.midbottom = self.pos
 
-    # Jumping
-    def jump(self):
-        self.jumping = True
-        # if on platform
-        hits = pygame.sprite.spritecollide(self, platforms, False)
-        try:
-            if hits[0].rect.bottom > self.rect.bottom:
-                self.vel.y = -19
-        except:
-            pass
-
-    # creates bullet objects
-    def shoot(self):
-        if self.alive:
-            # checks if cooldown is finished and resets it
-            if self.shoot_cooldown == 0:
-                self.shoot_cooldown = 20
-                # create bullet at the edge of the player sprite
-                bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] * self.direction), \
-                                self.rect.centery - (self.rect.size[1] / 4.5), self.direction, \
-                                "Player")
-                # update bullet image depending on direction of player
-                if self.direction < 0:
-                    bullet.image = pygame.transform.flip(bullet.image, self.flip, False)
-                bullet_group.add(bullet)
-
-    # checks if player is alive
-    def check_alive(self):
-        if self.health <= 0:
-            self.alive = False
-            self.kill()
-            self.health = 0
-
-    # Collision rectangle for Player
-    def draw(self, surface):
-        surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
-
-    # check if player is touching a platform object in platform group
-    def update_ground_collision(self):
-        hits = pygame.sprite.spritecollide(P1 , platforms, False)
-        if self.vel.y > 0:
-            self.jumping = True
-            try:
-                if hits[0].rect.bottom > self.rect.bottom:
-                    self.pos.y = hits[0].rect.top
-                    self.vel.y = 0
-                    self.jumping = False
-            except IndexError:
-                pass
-
-    # update cooldowns and Player methods
-    def update(self):
-        # set max fall velocity of player
-        if self.vel.y > 8:
-            self.vel.y = 8
-        # update player state
-        self.check_alive()
-        # call animation method
-        self.update_animation()
-        # call ground collision method
-        self.update_ground_collision()
-        # update cooldown
-        if self.shoot_cooldown > 0:
-            self.shoot_cooldown -= 1
-            
-    # Changes player image to animate actions 
-    def update_animation(self):
-        # update animation
-        ANIMATION_COOLDOWN = 80
-        # update animation depending on current frame
-        self.image = self.animation_list[self.action][self.frame_index]
-        # check time
-        if pygame.time.get_ticks() - self.update_time > ANIMATION_COOLDOWN:
-            self.update_time = pygame.time.get_ticks()
-            self.frame_index += 1
-        # if the animation runs out then start over
-        if self.frame_index >= len(self.animation_list[self.action]):
-            self.frame_index = 0
-
-    def update_action(self, new_action):
-        # check if new action is different than previous action
-        if new_action != self.action:
-            self.action = new_action
-            # update the animation setting
-            self.frame_index = 0
-            self.update_time = pygame.time.get_ticks()
-        
 # Enemy Class
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+class Enemy(Sprite):
+    def __init__(self, hitpoints, spawn_x, spawn_y, sprite_type):
         super().__init__()
-        # enemy health
-        self.health = 2
-        # cooldowns
-        self.walk_cooldown = 0
-        self.shoot_cooldown = 0
-        # check if enemy is jumping
-        self.jumping = False
-        # direction of sprite
-        self.direction = 1
-        self.flip = True
-        # get sprite image
-        self.alive = True
-        self.animation_list = []
-        self.frame_index = 0
-        self.action = 0
-        self.update_time = pygame.time.get_ticks()
-        # retrieve animations
-        self.getAnimations()
-        # direction of sprite
-        self.direction = 1
-        self.flip = False
+        # Set base health
+        self.health = hitpoints
         # Starting position
-        self.pos = vec((x, y))
-        # Physics
-        self.vel = vec(0,0)
-        self.acc = vec(0,0)
-        
+        self.pos = vec((spawn_x, spawn_y))
+        # set sprite type as enemy
+        self.type = sprite_type
+        # retrieve animations
+        self.get_animations()
+
     def move(self):
         # Enemy Gravity
         self.acc = vec(0,.6)
@@ -309,130 +309,15 @@ class Enemy(pygame.sprite.Sprite):
         if self.pos.x < 0:
             self.pos.x = SCREEN_WIDTH
         self.rect.midbottom = self.pos
-
-    def getAnimations(self):
-        # loop through animation folders
-        temp_list = []
-        for i in range(1):
-            img = pygame.image.load(resource_path(f'Enemy_Idle/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(5):
-            img = pygame.image.load(resource_path(f'Enemy_Walking/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(1):
-            img = pygame.image.load(resource_path(f'Enemy_Jumping/{i}.png')).convert_alpha()
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        # set image to current frame of current action
-        self.image = self.animation_list[self.action][self.frame_index]
-        # set player rectangle
-        self.rect = self.image.get_rect()
-
-    # Jumping
-    def jump(self):
-        self.jumping = True
-        # if on platform
-        hits = pygame.sprite.spritecollide(self, platforms, False)
-        try:
-            if hits[0].rect.bottom > self.rect.bottom:
-                self.vel.y = -19
-        except:
-            pass
-    # creates bullet objects
-    def shoot(self):
-        # checks if cooldown is finished and resets it
-        if self.shoot_cooldown == 0:
-            self.shoot_cooldown = 70
-            # create bullet at the edge of the enemy sprite
-            bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] \
-                            * self.direction),self.rect.centery \
-                            - (self.rect.size[1] / 4.5), self.direction, \
-                            "Enemy")
-            # update bullet image depending on direction of enemy
-            if self.direction < 0:
-                bullet.image = pygame.transform.flip(bullet.image, self.flip, False)
-            bullet_group.add(bullet)
-
-    # checks if enemy is alive
-    def check_alive(self):
-        # if the enemy is dead, remove it
-        if self.health <= 0:
-            self.alive = False
-            self.kill()
-
-    # Collision Rectangle for Enemy
-    def draw(self, surface):
-        surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
-
-    # Changes player image to animate actions 
-    def update_animation(self):
-        # update animation
-        ANIMATION_COOLDOWN = 80
-        # update animation depending on current frame
-        self.image = self.animation_list[self.action][self.frame_index]
-        # check time
-        if pygame.time.get_ticks() - self.update_time > ANIMATION_COOLDOWN:
-            self.update_time = pygame.time.get_ticks()
-            self.frame_index += 1
-        # if the animation runs out then start over
-        if self.frame_index >= len(self.animation_list[self.action]):
-            self.frame_index = 0
-
-    # change animation depeding on input
-    def update_action(self, new_action):
-        # check if new action is different than previous action
-        if new_action != self.action:
-            self.action = new_action
-            # update the animation setting
-            self.frame_index = 0
-            self.update_time = pygame.time.get_ticks()
-
-    # update cooldowns and Enemy methods
-    def update(self):
-        # set max fall velocity of enemy
-        if self.vel.y > 8:
-            self.vel.y = 8
-        # update enemy stae
-        self.check_alive()
-        # shoot if alive
-        if self.alive:
-            self.shoot()
-        # check if enemy is jumping
-        if self.jumping:
-            self.update_action(2) # 2 is jumping 
-        # update animation
-        self.update_animation()
-        # call ground collision method
-        self.update_ground_collision()
-        # update cooldown
-        if self.shoot_cooldown > 0:
-            self.shoot_cooldown -= 1
-
-    # check if enemy is touching a platform object in platform group
-    def update_ground_collision(self):
-        hits = pygame.sprite.spritecollide(self , platforms, False)
-        if self.vel.y > 0:
-            self.jumping = True
-            try:
-                if hits[0].rect.bottom > self.rect.bottom:
-                    self.pos.y = hits[0].rect.top
-                    self.vel.y = 0
-                    self.jumping = False
-            except IndexError:
-                pass
         
 # Bullet Class
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, x, y, direction, bulletType):
+    def __init__(self, pos_x, pos_y, direction, bulletType):
         pygame.sprite.Sprite.__init__(self)
         self.speed = 12
         self.image = bullet_img
         self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
+        self.rect.center = (pos_x, pos_y)
         self.direction = direction
         # shows if bullet is enemies or players
         self.type = bulletType
@@ -447,13 +332,13 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
         # check if bullet collides with sprite
         hits = pygame.sprite.spritecollide(P1, bullet_group, False)
-        if hits and P1.alive and hits[0].type == "Enemy" and hits[0].collide == 0:
+        if hits and hits[0].type == "Enemy" and hits[0].collide == 0:
             hits[0].collide = 1
             self.kill()
             P1.health -= 1
         for enemy in enemy_sprites:
             hits = pygame.sprite.spritecollide(enemy, bullet_group, False)
-            if hits and enemy.alive and hits[0].type == "Player" and hits[0].collide == 0:
+            if hits and hits[0].type == "Player" and hits[0].collide == 0:
                 hits[0].collide = 1
                 self.kill()
                 enemy.health -= 1
@@ -474,7 +359,7 @@ bullet_group = pygame.sprite.Group()
 platforms = pygame.sprite.Group()
 
 # Player and Platform variables
-P1 = Player()
+P1 = Player(5, SCREEN_WIDTH/2, (SCREEN_HEIGHT - 200), "Player")
 PT1 = Platform()
 PT2 = Platform()
 PT3 = Platform()
@@ -524,19 +409,12 @@ while True:
         # create 3 to 6 enemies
         for enemy in range(random.randint(3, 6)):
             # set random starting point
-            enemy = Enemy(random.randint(100, 1500), random.randint(45, 800))
+            enemy = Enemy(2, random.randint(100, 1500), random.randint(45, 800), "Enemy")
             # set random stage of movement cooldown
             enemy.walk_cooldown = random.randint(1, 800)
             # add enemy to sprite groups
             all_sprites.add(enemy)
             enemy_sprites.add(enemy)
-
-    # update and draw bullets
-    bullet_group.update()
-
-    # updates player
-    P1.update()
-    P1.move()
 
     # updates and draws enemy
     for enemy in enemy_sprites:
@@ -545,6 +423,10 @@ while True:
         # adds 50 points to score when enemy is killed
         if enemy.alive == False and P1.alive:
             SCOREBOARD += 50
+
+    # updates player
+    P1.update()
+    P1.move()
             
     # player shooting
     if shoot: 
@@ -553,9 +435,7 @@ while True:
     # change action
     pressed_keys = pygame.key.get_pressed()
     if P1.alive:
-        if P1.jumping:
-            P1.update_action(2) # 2 is jumping
-        elif pressed_keys[K_a] or pressed_keys[K_d]:
+        if pressed_keys[K_a] or pressed_keys[K_d]:
             P1.update_action(1) # 1 is walking
         else:
             P1.update_action(0) # 0 is Idle
@@ -582,6 +462,9 @@ while True:
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_SPACE:
                     shoot = False
+
+    # update and draw bullets
+    bullet_group.update()
 
     # Display images
     DISPLAYSURF.blit(BACKGROUND, (0, 0))
