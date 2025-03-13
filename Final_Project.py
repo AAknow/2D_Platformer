@@ -13,7 +13,7 @@ pygame.init()
 # Window name
 pygame.display.set_caption("Final Project")
 
-# Get the correct path for resources if run on different OS
+# Get the correct path for resources if run on different system
 def resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
@@ -48,11 +48,11 @@ FramePerSec = pygame.time.Clock()
 shoot = False
 
 # Background
-BACKGROUND = pygame.image.load(resource_path("Background.png")).convert_alpha()
+BACKGROUND = pygame.image.load(resource_path("Assets/Background.png")).convert_alpha()
 BACKGROUND = pygame.transform.scale(BACKGROUND, (1600, 900))
 
 # Load bullet image
-bullet_img = pygame.image.load(resource_path("Bullet.png")).convert_alpha()
+bullet_img = pygame.image.load(resource_path("Assets/Bullet.png")).convert_alpha()
 
 # Scoreboard variable
 SCOREBOARD = 0
@@ -76,12 +76,8 @@ ROUND = 0
 class Sprite(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-	# sprite health
-        self.health = 5
         # check if sprite is jumping
         self.jumping = False
-        # cooldowns
-        self.shoot_cooldown = 0
         # get sprite image
         self.alive = True
         # list to store animation lists
@@ -104,19 +100,19 @@ class Sprite(pygame.sprite.Sprite):
         temp_list = []
         # Idle Stance Animation
         for i in range(1):
-            img = pygame.image.load(resource_path(f'{self.type}_Idle/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'Assets/{self.name}_Idle/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         temp_list = []
         # Walking Animation
         for i in range(5):
-            img = pygame.image.load(resource_path(f'{self.type}_Walking/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'Assets/{self.name}_Walking/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         temp_list = []
         # Jumping Animation
         for i in range(1):
-            img = pygame.image.load(resource_path(f'{self.type}_Jumping/{i}.png')).convert_alpha()
+            img = pygame.image.load(resource_path(f'Assets/{self.name}_Jumping/{i}.png')).convert_alpha()
             temp_list.append(img)
         self.animation_list.append(temp_list)
         # set image to current frame of current action
@@ -143,6 +139,11 @@ class Sprite(pygame.sprite.Sprite):
             self.shoot_cooldown -= 1
         if self.type == "Enemy":
             self.shoot()
+        # Screen warping (left to right and vice versa)
+        if self.pos.x > SCREEN_WIDTH:
+            self.pos.x = 0
+        if self.pos.x < 0:
+            self.pos.x = SCREEN_WIDTH
 
     # change animation depending on action
     def update_action(self, new_action):
@@ -209,7 +210,7 @@ class Sprite(pygame.sprite.Sprite):
         if self.alive:
             # checks if cooldown is finished and resets it
             if self.shoot_cooldown == 0:
-                self.shoot_cooldown = 40
+                self.shoot_cooldown = self.shoot_cooldown_max
                 # create bullet at the edge of the sprite
                 bullet = Bullet(self.rect.centerx - (.7 * self.rect.size[0] * self.direction), \
                                 self.rect.centery - (self.rect.size[1] / 4.5), self.direction, \
@@ -222,16 +223,22 @@ class Sprite(pygame.sprite.Sprite):
 
 # Player Class
 class Player(Sprite):
-    def __init__(self, hitpoints, spawn_x, spawn_y, sprite_type):
+    def __init__(self, hitpoints, spawn_x, spawn_y):
         super().__init__()
         # set base health
         self.health = hitpoints
         # Starting position
         self.pos = vec(spawn_x, spawn_y)
-        # set sprite type as player
+        # set sprite type as player for bullet collision checks
         self.type = "Player"
+        # set sprite name
+        self.name = "Player"
         # retrieve animations
         self.get_animations()
+        # cooldown maximum
+        self.shoot_cooldown_max = 20
+        # cooldowns
+        self.shoot_cooldown = 20
         
     def move(self):
         # Player Gravity
@@ -253,20 +260,27 @@ class Player(Sprite):
         self.acc.x += self.vel.x * FRIC
         self.vel += self.acc
         self.pos += self.vel + 0.5 * self.acc
+        # set rect at sprite position
         self.rect.midbottom = self.pos
 
 # Enemy Class
 class Enemy(Sprite):
-    def __init__(self, hitpoints, spawn_x, spawn_y, sprite_type):
+    def __init__(self, hitpoints, spawn_x, spawn_y):
         super().__init__()
         # Set base health
         self.health = hitpoints
         # Starting position
         self.pos = vec((spawn_x, spawn_y))
-        # set sprite type as enemy
-        self.type = sprite_type
+        # set sprite type as enemy for bullet collision checks
+        self.type = "Enemy"
+        # set sprite name
+        self.name = "Enemy"
         # retrieve animations
         self.get_animations()
+        # cooldown maximum
+        self.shoot_cooldown_max = 80
+        # cooldowns
+        self.shoot_cooldown = 80
 
     def move(self):
         # Enemy Gravity
@@ -303,11 +317,7 @@ class Enemy(Sprite):
             # flip sprite to face the left
             self.flip = True
             self.direction = -1
-        # Screen warping (left to right and vice versa)
-        if self.pos.x > SCREEN_WIDTH:
-            self.pos.x = 0
-        if self.pos.x < 0:
-            self.pos.x = SCREEN_WIDTH
+        # set rect at sprite position
         self.rect.midbottom = self.pos
         
 # Bullet Class
@@ -359,7 +369,7 @@ bullet_group = pygame.sprite.Group()
 platforms = pygame.sprite.Group()
 
 # Player and Platform variables
-P1 = Player(5, SCREEN_WIDTH/2, (SCREEN_HEIGHT - 200), "Player")
+P1 = Player(5, SCREEN_WIDTH/2, (SCREEN_HEIGHT - 200))
 PT1 = Platform()
 PT2 = Platform()
 PT3 = Platform()
@@ -409,7 +419,8 @@ while True:
         # create 3 to 6 enemies
         for enemy in range(random.randint(3, 6)):
             # set random starting point
-            enemy = Enemy(2, random.randint(100, 1500), random.randint(45, 800), "Enemy")
+            enemy = Enemy(2, random.randint(100, 1500), \
+                          random.randint(45, 800))
             # set random stage of movement cooldown
             enemy.walk_cooldown = random.randint(1, 800)
             # add enemy to sprite groups
