@@ -1,4 +1,4 @@
-Disclaimer: This game is a work in progress. It is a 5 week project that will be in a playable state by 3/8.
+Disclaimer: This game is a WIP. The current version is in a playable state but is still being updated.
 
 To run the game, follow the guide below.
 
